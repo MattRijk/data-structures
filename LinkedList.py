@@ -1,65 +1,77 @@
-class Node:
-	def __init__(self, value, next):
-		self.value = value
-		self.next = next
+"""
+    Demonstration of Linked Lists in Python.
+"""
+class LinkedNode:
+    def __init__(self, value, tail = None):
+        """Node in a Linked List."""
+        self.value = value
+        self.next  = tail
+
+    def checkInfinite(self):
+        """Check whether infinite loop via next."""
+        p1 = p2 = self
+        while p1 != None and p2 != None:
+            if p2.next == None: return False
+
+            p1 = p1.next
+            p2 = p2.next.next
+            
+            if p1 == p2: return True
+        return False
 
 class LinkedList:
-	def __init__(self):
-		self.head = None
+    def __init__(self, *start):
+        """Demonstrate linked lists in Python."""
+        self.head  = None
+        for _ in start:
+            self.prepend(_)
 
-	def insert_at_head(self, value):
-		# Insert value at beginning
-		temp = Node(value, self.head)
-		self.head = temp
+    def prepend(self, value):
+        """Prepend element into list."""
+        self.head = LinkedNode(value, self.head)
 
-	def insert_at_end(self, value):
-		# Insert value at end
-		current = self.head
+    def pop(self):
+        """Remove first value in list."""
+        if self.head is None:
+            raise Exception ("Linked list is empty.")
+        val = self.head.value
+        self.head = self.head.next
+        return val
 
-		if current == None:
-			self.head = Node(value, None)
-		else:
-			while current.next:
-				current = current.next
-			current.next = Node(value, None)
+    def remove(self, value):
+        """Remove value from list."""
+        n = self.head
+        last = None
+        while n != None:
+            if n.value == value:
+                if last == None:
+                    self.head = self.head.next
+                else:
+                    last.next = n.next
+                return True
+            n = n.next
+        return False
+        
+    def __iter__(self):
+        """Iterator of values in the list."""
+        n = self.head
+        while n != None:
+            yield n.value
+            n = n.next
+        
+    def __repr__(self):
+        """String representation of linked list."""
+        if self.head is None:
+            return 'link:[]'
 
-	def delete(self, value):
-		# Delete the first instance of value from the list
-		current = self.head 
+        return 'link:[{0:s}]'.format(','.join(map(str,self)))
 
-		if current.value == value:
-			self.head = current.next
-			current = current.next
+    def __len__(self):
+        """Count values in list."""
+        n = self.head
+        count = 0
+        while n != None:
+            count += 1
+            n = n.next
+        return count
 
-		while current.next:
-			if current.next.value == value:
-				current.next = current.next.next
-			if current.next != None:
-				current = current.next
-			else:
-				break
-
-	def print_list(self):
-		current = self.head
-		while current:
-			print current.value,
-			current = current.next
-		print
-
-
-ll = LinkedList()
-ll.insert_at_head(4)
-ll.insert_at_head(3)
-ll.insert_at_head(2)
-
-ll.print_list() #2, 3, 4
-
-ll.insert_at_end(5)
-ll.print_list() #2, 3, 4, 5
-
-ll.delete(4)
-ll.print_list() #3, 5
-
-ll.delete(5)
-ll.delete(2)
-ll.print_list() #3
