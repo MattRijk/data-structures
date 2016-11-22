@@ -1,47 +1,188 @@
-class KVPair:
-    def __init__(self,key,value):
+import ctypes
+class Array:
+    def __init__(self, size):
+        assert size > 0, "Array size must be > 0"
+        self._size = size
+        PyArrayType = ctypes.py_object * size
+        self._elements = PyArrayType()
+        self.clear(None)
+
+    def __len__(self):
+        return self._size
+    def __getitem__(self, index):
+        assert index >= 0 and index < len(self), \
+                "Array subscription out of range"
+        return self._elements[index]
+    def __setitem__(self, index, value):
+        assert index >= 0 and index < len(self), \
+                "Array subscription out of range"
+        self._elements[index] = value
+    def clear(self, value):
+        for i in range(len(self)):
+            self._elements[i] = value
+    def __iter__(self):
+        return _ArrayIterator(self._elements)
+    
+class _MapEntry:
+    """ storage class for HashMap """
+
+    def __init__(self, key, value):
         self.key = key
         self.value = value
 
-    def __eq__(self,other):
-        if type(self) != type(other):
-            return False
+    def __eq__(self, rhsEntry):
+        return isinstance(rhsEntry, self.__class__) and \
+              self.key   == rhsEntry.key   and \
+              self.value == rhsEntry.value
 
-        return self.key == other.key
+    def __ne__(self, rhsEntry):
+        return not self.__eq__(rhsEntry)
 
-    def getKey(self):
-        return self.key
+class _HashMapIterator:
+    """ Iterator class for HashMap """
 
-    def getValue(self):
-        return self.value
-
-    def __hash__(self):
-        return hash(self.key)
-
-class HashMap:
-
-    def __init__(self):
-        self.hSet = hashset.HashSet()
-
-    def __len__(self):
-        return len(self.hSet)
-
-    def __contains__(self,item):
-        return HashSet.__KVPair(item,None) in self.hSet
-
-    def not__contains__(self,item):
-        return item not in self.hSet
-
-    def __setitem__(self,key,value):
-        self.hSet.add(HashMap.__KVPair(key,value))
-
-    def __getitem__(self,key):
-        if HashMap.KVPair(key,None) in self.hSet:
-            val = self.hSet[HashMap.KVPair(key,None)].getValue()
-            return val
-
-        raise KeyError("Key " + str(key) + " not in HashMap")
+    def __init__(self, table):
+        self._table = table
+        self._curPos = 0
 
     def __iter__(self):
-        for x in self.hSet:
-            yield x.getKey()
+        return self
+
+    def next(self):
+        """ Iterator's next() method for iteration """
+        while self._curPos < len(self._table):
+            entry = self._table[self._curPos]
+            if entry is HashMap.UNUSED or entry == HashMap.EMPTY:
+                self._curPos += 1
+            else:
+                self._curPos += 1
+                return entry.key
+        raise StopIteration
+
+class HashMap:
+    """ the HashMap ADT with closed hashing and a double hashing probe. """
+
+    # Define constants to represent the status of each table entry
+    UNUSED = None
+    EMPTY = _MapEntry(None, None) # Placeholder to show off its existence ...
+
+    def __init__(self):
+        """ Creates an empty map instance """
+        self._table = Array(7)
+        self._count = 0
+        self._maxCount = len(self._table) - len(self._table) // 3
+
+    def __len__(self):
+        """ Returns the number of entries in the map."""
+        return self._count
+
+    def __contains__(self, key):
+        """ Determine if the map contains the given key """
+        slot = self._findSlot(key, False)
+        return slot is not None
+
+    def add(self, key, value):
+        """ Adds a new entry to the map if the key doesn't exist. Otherwise,
+        the new value replaces the current value associated with the key """
+
+        if key in self:
+            slot = self._findSlot(key, False)
+            self._table[slot].value = value
+            return False
+        else:
+            slot = self._findSlot(key, True)
+            self._table[slot] = _MapEntry(key, value)
+            self._count += 1
+            if self._count == self._maxCount:
+                self._rehash()
+            return True
+
+    def __getitem__(self, key):
+        return self.valueOf(key)
+
+    def __delitem__(self, key):
+        self.remove(key)
+
+    def __setitem__(self, key, value):
+        self.add(key, value)
+
+    def valueOf(self, key):
+        """ Returns the value associated with the key. """
+
+        slot = self._findSlot(key, False)
+        assert slot is not None, "Invalid map key."
+        return self._table[slot].value
+
+    def remove(self, key):
+        """ Removes the entry associated with the key. """
+
+        slot = self._findSlot(key, False)
+        assert slot is not None, "Invalid map key."
+        self._table[slot] = HashMap.EMPTY
+        self._count -= 1
+
+    def __iter__(self):
+        return _HashMapIterator(self._table)
+
+    def _findSlot(self, key, forInsert):
+        """ Find the slot containing the key or where the key can be added.
+        forInsert indicates if the search is for the insertion, which locates
+        the slot into which the new key can be added."""
+
+        assert key is not None, "Can't use None as the search key"
+
+        # Computes the home slot and the step size
+        origSlot = self._hash1(key)
+        step = self._hash2(key)
+
+        # Probe for the key
+        slot = origSlot
+        tabSize = len(self._table)
+
+        while self._table[slot] is not HashMap.UNUSED:
+            if forInsert and self._table[slot] == HashMap.EMPTY:
+                return slot
+            elif not forInsert and (self._table[slot] != HashMap.EMPTY and \
+                    self._table[slot].key == key) :
+                return slot
+            else:
+                slot = (slot + step) % tabSize
+                # To avoid the infinite loop when no UNUSED slot exists
+                if slot == origSlot and not forInsert:
+                    return None
+
+        if forInsert:
+            return slot
+        else:
+            return HashMap.UNUSED
+
+    def _rehash(self):
+        """ Rebuild the hash table """
+
+        # Create a new large table
+        origTable = self._table
+        newSize = len(self._table) * 2 + 1
+        self._table = Array(newSize)
+
+        # reset the size attributes.
+        self._count = 0
+        self._maxCount = newSize - newSize//3
+
+        for entry in origTable:
+            if entry is not HashMap.UNUSED and entry != HashMap.EMPTY:
+                slot = self._findSlot(entry.key, True)
+                self._table[slot] = entry
+                self._count += 1
+
+    # slot = (h(key) + i*hp(key)) % M
+    def _hash1(self, key):
+        """ The main hash function for mapping keys to table entries. """
+        return abs(hash(key)) % len(self._table)
+
+    def _hash2(self, key):
+        """ The second hash function used with double hashing probes. """
+        return 1 + abs(hash(key)) % (len(self._table) - 2)
+    
+H = HashMap()
+H.add('ten',10)
+H.valueOf('ten')
